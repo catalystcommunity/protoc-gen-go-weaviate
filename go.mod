@@ -1,10 +1,10 @@
-module github.com/catalystsquad/protoc-gen-go-weaviate
+module github.com/catalystcommunity/protoc-gen-go-weaviate
 
 go 1.20
 
 require (
 	github.com/brianvoe/gofakeit/v6 v6.21.0
-	github.com/catalystsquad/app-utils-go v1.0.7
+	github.com/catalystcommunity/app-utils-go v1.0.7
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/joomcode/errorx v1.1.0

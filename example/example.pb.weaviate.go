@@ -2,7 +2,7 @@ package example_example
 
 import (
 	json "encoding/json"
-	errorutils "github.com/catalystsquad/app-utils-go/errorutils"
+	errorutils "github.com/catalystcommunity/app-utils-go/errorutils"
 	strfmt "github.com/go-openapi/strfmt"
 	filters "github.com/weaviate/weaviate-go-client/v4/weaviate/filters"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"

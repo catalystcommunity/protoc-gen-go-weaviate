@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package weaviate;
 
-option go_package = "github.com/catalystsquad/protoc-gen-go-weaviate/options;weaviate";
+option go_package = "github.com/catalystcommunity/protoc-gen-go-weaviate/options;weaviate";
 
 import "google/protobuf/descriptor.proto";
 
