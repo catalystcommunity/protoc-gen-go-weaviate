@@ -15,7 +15,7 @@ on:
       - 'go.sum'
 jobs:
   release:
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.merged == true
     name: Make a Release
     runs-on: ubuntu-latest
     steps:
@@ -34,7 +34,7 @@ jobs:
           go build -race
       - name: Get semver-tags
         run: |
-          go install github.com/catalystsquad/semver-tags@latest
+          go install github.com/catalystcommunity/semver-tags@latest
       - name: Semver Tags
         id: semver-tags
         working-directory: ./

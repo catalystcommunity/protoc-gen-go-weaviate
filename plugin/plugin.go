@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	weaviate "github.com/catalystsquad/protoc-gen-go-weaviate/options"
+	weaviate "github.com/catalystcommunity/protoc-gen-go-weaviate/options"
 	"github.com/joomcode/errorx"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -64,6 +64,7 @@ var templateFuncs = map[string]any{
 	"tokenization":                    tokenization,
 	"moduleConfig":                    moduleConfig,
 	"classModuleConfig":               classModuleConfig,
+	"summaryModuleConfig":             summaryModuleConfig,
 	"summaryEnabled":                  summaryEnabled,
 }
 
@@ -122,7 +123,10 @@ func (b *Builder) Generate() (response *pluginpb.CodeGeneratorResponse, err erro
 				"messages": protoFile.Messages,
 			}
 			g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: "strings"})
-			g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: "github.com/tidwall/gjson"})
+			g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: "regexp"})
+			g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: "github.com/catalystcommunity/app-utils-go/errorutils"})
+			g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: "github.com/go-openapi/strfmt"})
+			g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: "github.com/weaviate/weaviate-go-client/v4/weaviate/filters"})
 			if err = tpl.Execute(&data, templateMap); err != nil {
 				return
 			}
@@ -286,6 +290,17 @@ func classModuleConfig(m *protogen.Message) (moduleConfig string) {
 		moduleConfig = options.ModuleConfig
 		if err := json.Unmarshal([]byte(moduleConfig), &map[string]interface{}{}); err != nil {
 			panic(errorx.IllegalArgument.New("moduleConfig field option is not valid json"))
+		}
+	}
+	return
+}
+
+func summaryModuleConfig(m *protogen.Message) (summaryModuleConfig string) {
+	options := getMessageOptions(m)
+	if options != nil && options.SummaryModuleConfig != "" {
+		summaryModuleConfig = options.SummaryModuleConfig
+		if err := json.Unmarshal([]byte(summaryModuleConfig), &map[string]interface{}{}); err != nil {
+			panic(errorx.IllegalArgument.New("summaryModuleConfig field option is not valid json"))
 		}
 	}
 	return

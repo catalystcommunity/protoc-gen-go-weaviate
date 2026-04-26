@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/catalystsquad/protoc-gen-go-weaviate/plugin"
+	"github.com/catalystcommunity/protoc-gen-go-weaviate/plugin"
 	"io/ioutil"
 	"os"
 

@@ -13,6 +13,8 @@ import (
 	"strconv"
 )
 
+var summaryRegex = regexp.MustCompile("[^-'\\\\.a-zA-Z0-9 ]+")
+
 {{ range .messages }}
 {{ if shouldGenerateMessage . }}
 type {{ structName . }} struct {
@@ -24,7 +26,7 @@ type {{ structName . }} struct {
 	{{ end }}
 }
 
-func (s {{ structName . }}) ToProto() (theProto *{{ protoStructName . }}, err error) {
+func (s *{{ structName . }}) ToProto() (theProto *{{ protoStructName . }}, err error) {
     theProto = &{{ protoStructName . }}{}
 	{{- range .Fields }}
 	{{ if includeField . }}
@@ -124,11 +126,11 @@ func (s *{{ protoStructName . }}) ToWeaviateModel() (model *{{ structName . }}, 
     return
 }
 
-func (s {{ structName . }}) WeaviateClassName() string {
+func (s *{{ structName . }}) WeaviateClassName() string {
 	return "{{ className . }}"
 }
 
-func (s {{ structName . }}) FullWeaviateClassSchema() models.Class {
+func (s *{{ structName . }}) FullWeaviateClassSchema() models.Class {
     class := models.Class{
 		Class:      s.WeaviateClassName(),
 		Properties: s.AllWeaviateClassSchemaProperties(),
@@ -145,14 +147,14 @@ func (s {{ structName . }}) FullWeaviateClassSchema() models.Class {
 	return class
 }
 
-func (s {{ structName . }}) CrossReferenceWeaviateClassSchema() models.Class {
+func (s *{{ structName . }}) CrossReferenceWeaviateClassSchema() models.Class {
 	return models.Class{
 		Class:      s.WeaviateClassName(),
 		Properties: s.WeaviateClassSchemaCrossReferenceProperties(),
 	}
 }
 
-func (s {{ structName . }}) NonCrossReferenceWeaviateClassSchema() models.Class {
+func (s *{{ structName . }}) NonCrossReferenceWeaviateClassSchema() models.Class {
 	class := models.Class{
 		Class:      s.WeaviateClassName(),
         {{- if vectorizer . }}
@@ -174,7 +176,7 @@ func (s {{ structName . }}) NonCrossReferenceWeaviateClassSchema() models.Class 
 	return class
 }
 
-func (s {{ structName . }}) WeaviateClassSchemaNonCrossReferenceProperties() []*models.Property {
+func (s *{{ structName . }}) WeaviateClassSchemaNonCrossReferenceProperties() []*models.Property {
 	properties := []*models.Property{}
   		{{ range .Fields -}}
 		    {{ if and (includeField . ) (ne (propertyName .) "id") (ne (fieldIsCrossReference .) true) }}
@@ -217,13 +219,23 @@ func (s {{ structName . }}) WeaviateClassSchemaNonCrossReferenceProperties() []*
         summaryProperty := &models.Property{
           Name: "_summary",
           DataType: []string{"text"},
+          Tokenization: "field",
         }
+        {{- if summaryModuleConfig . }}
+        var summaryModuleConfig map[string]interface{}
+	    summaryModuleConfigBytes := []byte(` + "`" + `{{ summaryModuleConfig . }}` + "`" + `)
+	    summaryModuleConfigErr := json.Unmarshal(summaryModuleConfigBytes, &summaryModuleConfig)
+	    if summaryModuleConfigErr != nil {
+	      panic(summaryModuleConfigErr)
+	    }
+	    summaryProperty.ModuleConfig = summaryModuleConfig
+        {{ end }}
         properties = append(properties, summaryProperty)
         {{- end }}
 	return properties
 }
 
-func (s {{ structName . }}) WeaviateClassSchemaCrossReferenceProperties() []*models.Property {
+func (s *{{ structName . }}) WeaviateClassSchemaCrossReferenceProperties() []*models.Property {
 	properties := []*models.Property{}
   		{{- range .Fields }}
 		    {{ if and (includeField . ) (ne (propertyName .) "id") (fieldIsCrossReference .) -}}
@@ -236,11 +248,11 @@ func (s {{ structName . }}) WeaviateClassSchemaCrossReferenceProperties() []*mod
 	return properties
 }
 
-func (s {{ structName . }}) AllWeaviateClassSchemaProperties() []*models.Property {
+func (s *{{ structName . }}) AllWeaviateClassSchemaProperties() []*models.Property {
 	return append(s.WeaviateClassSchemaNonCrossReferenceProperties(), s.WeaviateClassSchemaCrossReferenceProperties()...)
 }
 
-func (s {{ structName . }}) Data() (map[string]interface{}, error) {
+func (s *{{ structName . }}) Data() (map[string]interface{}, error) {
 	data := map[string]interface{}{}
 	{{- range .Fields }}
 	{{ if includeField . }}
@@ -276,7 +288,7 @@ func (s {{ structName . }}) Data() (map[string]interface{}, error) {
 	return data, nil
 }
 
-func (s {{ structName . }}) addCrossReferenceData(data map[string]interface{}) map[string]interface{} {
+func (s *{{ structName . }}) addCrossReferenceData(data map[string]interface{}) map[string]interface{} {
     {{- range .Fields }}
     {{- if and (includeField . ) (fieldIsCrossReference .) }}
     {{- if fieldIsRepeated . }}
@@ -313,11 +325,11 @@ func (s {{ structName . }}) addCrossReferenceData(data map[string]interface{}) m
 	return data
 }
 
-func (s {{ structName . }}) exists(ctx context.Context, client *weaviate.Client) (bool, error) {
+func (s *{{ structName . }}) exists(ctx context.Context, client *weaviate.Client) (bool, error) {
 	return client.Data().Checker().WithID(lo.FromPtr(s.Id)).WithClassName(s.WeaviateClassName()).Do(ctx)
 }
 
-func (s {{ structName . }}) Upsert(ctx context.Context, client *weaviate.Client, consistencyLevel string) (data *data.ObjectWrapper, err error) {
+func (s *{{ structName . }}) Upsert(ctx context.Context, client *weaviate.Client, consistencyLevel string) (data *data.ObjectWrapper, err error) {
 	data, err = s.Create(ctx, client, consistencyLevel)
 	if err != nil && strings.Contains(err.Error(), "already exists") {
 		err = s.Update(ctx, client, consistencyLevel)
@@ -325,13 +337,13 @@ func (s {{ structName . }}) Upsert(ctx context.Context, client *weaviate.Client,
 	return
 }
 
-func (s {{ structName . }}) Create(ctx context.Context, client *weaviate.Client, consistencyLevel string) (data *data.ObjectWrapper, err error) {
+func (s *{{ structName . }}) Create(ctx context.Context, client *weaviate.Client, consistencyLevel string) (data *data.ObjectWrapper, err error) {
 	{{- range .Fields }}
 	  {{- if and (includeField . ) (fieldIsCrossReference .) }}
         {{- if fieldIsRepeated . }}
           for _, crossReference := range s.{{ structFieldName . }} {
 			if crossReference != nil {
-			  _, err = crossReference.Upsert(ctx, client, consistencyLevel)
+			  _, err = crossReference.CreateEmptyReferenceIgnoreExistError(ctx, client, consistencyLevel)
               if err != nil {
                 return
               }
@@ -339,7 +351,7 @@ func (s {{ structName . }}) Create(ctx context.Context, client *weaviate.Client,
 	      }
         {{- else }}
         if s.{{ structFieldName . }} != nil {
-		  _, err = s.{{ structFieldName . }}.Upsert(ctx, client, consistencyLevel)
+		  _, err = s.{{ structFieldName . }}.CreateEmptyReferenceIgnoreExistError(ctx, client, consistencyLevel)
 		  if err != nil {
 		    return
 		  }
@@ -363,7 +375,28 @@ func (s {{ structName . }}) Create(ctx context.Context, client *weaviate.Client,
 		Do(ctx)
 }
 
-func (s {{ structName . }}) Update(ctx context.Context, client *weaviate.Client, consistencyLevel string) (err error) {
+func (s *{{ structName . }}) CreateEmptyReference(ctx context.Context, client *weaviate.Client, consistencyLevel string) (data *data.ObjectWrapper, err error) {
+	return client.Data().Creator().
+		WithClassName(s.WeaviateClassName()).
+		{{- if idFieldIsOptional . }}
+		WithID(lo.FromPtr(s.Id)).
+		{{- else }}
+		WithID(s.Id).
+		{{- end }}
+		WithConsistencyLevel(consistencyLevel).
+		Do(ctx)
+}
+
+func (s *{{ structName . }}) CreateEmptyReferenceIgnoreExistError(ctx context.Context, client *weaviate.Client, consistencyLevel string) (data *data.ObjectWrapper, err error) {
+	data, err = s.CreateEmptyReference(ctx, client, consistencyLevel)
+	if err != nil && strings.Contains(err.Error(), "exists") {
+		// ignore exists error
+		err = nil
+	}
+	return
+}
+
+func (s *{{ structName . }}) Update(ctx context.Context, client *weaviate.Client, consistencyLevel string) (err error) {
 	{{- range .Fields }}
 	  {{- if and (includeField . ) (fieldIsCrossReference .) }}
         {{- if fieldIsRepeated . }}
@@ -377,7 +410,7 @@ func (s {{ structName . }}) Update(ctx context.Context, client *weaviate.Client,
 	      }
         {{- else }}
         if s.{{ structFieldName . }} != nil {
-		  _, err = s.{{ structFieldName . }}.Upsert(ctx, client, consistencyLevel)
+		  _, err = s.{{ structFieldName . }}.CreateEmptyReferenceIgnoreExistError(ctx, client, consistencyLevel)
 		  if err != nil {
 		    return
 		  }
@@ -401,7 +434,7 @@ func (s {{ structName . }}) Update(ctx context.Context, client *weaviate.Client,
 		Do(ctx)
 }
 
-func (s {{ structName . }}) Delete(ctx context.Context, client *weaviate.Client, consistencyLevel string) error {
+func (s *{{ structName . }}) Delete(ctx context.Context, client *weaviate.Client, consistencyLevel string) error {
 	return client.Data().Deleter().
 		WithClassName(s.WeaviateClassName()).
 		{{- if idFieldIsOptional . }}
@@ -413,23 +446,80 @@ func (s {{ structName . }}) Delete(ctx context.Context, client *weaviate.Client,
 		Do(ctx)
 }
 
-func (s {{ structName . }}) EnsureFullClass(client *weaviate.Client, continueOnError bool) (err error) {
+func (s *{{ structName . }}) EnsureFullClass(client *weaviate.Client, continueOnError bool) (err error) {
 	if err = s.EnsureClassWithoutCrossReferences(client, continueOnError); err != nil {
 		return
 	}
 	return s.EnsureClassWithCrossReferences(client, continueOnError)
 }
 
-func (s {{ structName . }}) EnsureClassWithoutCrossReferences(client *weaviate.Client, continueOnError bool) error {
+func (s *{{ structName . }}) EnsureClassWithoutCrossReferences(client *weaviate.Client, continueOnError bool) error {
 	return ensureClass(client, s.NonCrossReferenceWeaviateClassSchema(), continueOnError)
 }
 
-func (s {{ structName . }}) EnsureClassWithCrossReferences(client *weaviate.Client, continueOnError bool) error {
+func (s *{{ structName . }}) EnsureClassWithCrossReferences(client *weaviate.Client, continueOnError bool) error {
 	return ensureClass(client, s.CrossReferenceWeaviateClassSchema(), continueOnError)
 }
 
-func (s {{ structName . }}) SummaryData() (string, error) {
+func (s *{{ structName . }}) SummaryData() (string, error) {
 	return getStringValue(s)
+}
+
+func BatchDelete{{ className . }}(ctx context.Context, client *weaviate.Client, records []*{{ className . }}) (*models.BatchDeleteResponse, error) {
+	deleteWhereBuilder := &filters.WhereBuilder{}
+	deleteWhereBuilder = deleteWhereBuilder.WithOperator(filters.Or)
+	operands := []*filters.WhereBuilder{}
+	// delete
+	for _, record := range records {
+		if record.Id != nil {
+			builder := &filters.WhereBuilder{}
+			builder = builder.WithPath([]string{"id"}).WithOperator(filters.Equal).WithValueText(*record.Id)
+			operands = append(operands, builder)
+		}
+	}
+	deleteWhereBuilder = deleteWhereBuilder.WithOperands(operands)
+	deleter := client.Batch().ObjectsBatchDeleter().WithClassName("{{ className . }}").WithWhere(deleteWhereBuilder).WithOutput("minimal")
+	response, err := deleter.Do(ctx)
+	errorutils.LogOnErr(nil, "error deleting objects", err)
+	return response, err
+}
+
+func BatchCreate{{ className . }}(ctx context.Context, client *weaviate.Client, records []*{{ className . }}) ([]models.ObjectsGetResponse, error) {
+	objects := []*models.Object{}
+	for _, record := range records {
+		model, err := record.ToWeaviateModel()
+		if err != nil {
+			return nil, err
+		}
+		dataMap, err := model.Data()
+		if err != nil {
+			return nil, err
+		}
+		var id strfmt.UUID
+		err = id.UnmarshalText([]byte(*model.Id))
+		if err != nil {
+			return nil, err
+		}
+		obj := &models.Object{
+			Class:      model.WeaviateClassName(),
+			ID:         id,
+			Properties: dataMap,
+		}
+		objects = append(objects, obj)
+	}
+	creator := client.Batch().ObjectsBatcher().WithObjects(objects...)
+	response, err := creator.Do(ctx)
+	errorutils.LogOnErr(nil, "error batch creating objects", err)
+	return response, err
+}
+
+func BatchIndex{{ className . }}(ctx context.Context, client *weaviate.Client, records []*{{ className . }}) ([]models.ObjectsGetResponse, *models.BatchDeleteResponse, error) {
+	deleteResponse, err := BatchDelete{{ className . }}(ctx, client, records)
+	if err != nil {
+		return nil, nil, err
+	}
+	createResponse, err := BatchCreate{{ className . }}(ctx, client, records)
+	return createResponse, deleteResponse, err
 }
 {{ end }}
 {{ end }}
@@ -438,7 +528,8 @@ func EnsureClasses(client *weaviate.Client, continueOnError bool) (err error) {
 	// create classes without cross references first so there are no errors about missing classes
 	{{- range .messages }}
 	{{- if shouldGenerateMessage . }}
-	err = {{ structName . }}{}.EnsureClassWithoutCrossReferences(client, continueOnError)
+    {{ structName . }}Pointer := &{{ structName . }}{}
+	err = {{ structName . }}Pointer.EnsureClassWithoutCrossReferences(client, continueOnError)
 	if !continueOnError && err != nil {
 		return
 	}
@@ -447,7 +538,7 @@ func EnsureClasses(client *weaviate.Client, continueOnError bool) (err error) {
 	// update classes including cross references
 	{{- range .messages }}
 	{{- if shouldGenerateMessage . }}
-	err = {{ structName . }}{}.EnsureClassWithCrossReferences(client, continueOnError)
+	err = {{ structName . }}Pointer.EnsureClassWithCrossReferences(client, continueOnError)
 	if !continueOnError && err != nil {
 		return
 	}
@@ -517,15 +608,8 @@ func getStringValue(x interface{}) (value string, err error) {
 	if jsonBytes, err = json.Marshal(x); err != nil {
 		return
 	}
-	builder := new(strings.Builder)
-	for _, result := range gjson.GetBytes(jsonBytes, "@values").Array() {
-		resultString := result.String()
-		if resultString != "" {
-			builder.WriteString(resultString)
-			builder.WriteString(" ")
-		}
-	}
-	value = builder.String()
+	summaryString := summaryRegex.ReplaceAllString(string(jsonBytes), " ")
+	value = strings.ToLower(summaryString)
 	return
 }
 `
